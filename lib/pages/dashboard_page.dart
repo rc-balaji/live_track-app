@@ -3,8 +3,8 @@ import 'package:live_track_app/pages/live_location_page.dart';
 import 'package:live_track_app/pages/show_location_page.dart';
 import 'package:provider/provider.dart';
 import '../providers/user_provider.dart';
-import '../services/api_service.dart'; // Import the ApiService for fetching locations
-import 'login_page.dart'; // Import LoginPage to navigate directly
+import '../services/api_service.dart';
+import 'login_page.dart';
 
 class DashboardPage extends StatefulWidget {
   @override
@@ -12,81 +12,90 @@ class DashboardPage extends StatefulWidget {
 }
 
 class _DashboardPageState extends State<DashboardPage> {
-  bool _loading = true; // Track the loading state
-  bool _addingLocation = false; // Track if we're adding a location
-  List<dynamic> _locations = []; // To store locations data
+  bool _loading = true;
+  bool _addingLocation = false;
+  List<dynamic> _locations = [];
+  String _filter = 'All'; // Default filter
 
   @override
   void initState() {
     super.initState();
-    _fetchLocations(); // Fetch locations when the page is initialized
+    _fetchLocations();
   }
 
-  // Function to fetch locations from the API
   Future<void> _fetchLocations() async {
     final userProvider = Provider.of<UserProvider>(context, listen: false);
     final response = await ApiService().fetchLocations(userProvider.userId);
 
+    if (!mounted) return;
+
     setState(() {
-      _locations = response; // Assuming the response is a list of locations
-      _loading = false; // Set loading to false after data is fetched
+      _locations = response;
+      _loading = false;
     });
   }
 
-  // Function to add a location
   Future<void> _addLocation() async {
     final userProvider = Provider.of<UserProvider>(context, listen: false);
     final name = await _showLocationDialog();
 
-    if (name.isEmpty) {
-      return;
-    }
+    if (name.isEmpty) return;
 
     setState(() {
-      _addingLocation = true; // Show loading while adding location
+      _addingLocation = true;
     });
 
     final response = await ApiService().addLocation(userProvider.userId, name);
 
+    if (!mounted) return;
+
     if (response != null && response.containsKey('location_id')) {
-      _fetchLocations(); // Fetch the updated list of locations after adding a new one
-      Navigator.pushReplacement(
-        context,
-        MaterialPageRoute(
+      _fetchLocations();
+      if (mounted) {
+        Navigator.pushReplacement(
+          context,
+          MaterialPageRoute(
             builder: (context) => LiveLocationPage(
-                  locationId: response['location_id'],
-                  userId: userProvider.userId,
-                )),
-      );
+              locationId: response['location_id'],
+              userId: userProvider.userId,
+            ),
+          ),
+        );
+      }
     } else {
-      _showErrorDialog(response['message']); //asasa
+      if (mounted) {
+        _showErrorDialog(response['message']);
+      }
     }
 
-    setState(() {
-      _addingLocation = false; // Hide loading after the location is added
-    });
+    if (mounted) {
+      setState(() {
+        _addingLocation = false;
+      });
+    }
   }
 
-  // Function to show the dialog for adding a location
   Future<String> _showLocationDialog() async {
     String locationName = '';
     await showDialog<String>(
       context: context,
       builder: (BuildContext context) {
         return AlertDialog(
-          title: Text('Enter Location Name'),
+          title: Text('Enter Location Name',
+              style: TextStyle(fontWeight: FontWeight.bold, fontSize: 20)),
           content: TextField(
             onChanged: (value) {
               locationName = value;
             },
-            decoration: InputDecoration(hintText: "Location Name"),
+            decoration: InputDecoration(
+                hintText: "Location Name", border: OutlineInputBorder()),
           ),
           actions: [
             TextButton(
               onPressed: () {
                 Navigator.of(context).pop(locationName);
               },
-              child: Text('Submit'),
+              child: Text('Submit', style: TextStyle(color: Colors.blue)),
             ),
           ],
         );
@@ -95,20 +104,20 @@ class _DashboardPageState extends State<DashboardPage> {
     return locationName;
   }
 
-  // Function to show error messages
   void _showErrorDialog(String message) {
     showDialog(
       context: context,
       builder: (BuildContext context) {
         return AlertDialog(
-          title: Text('Error'),
+          title: Text('Error',
+              style: TextStyle(fontWeight: FontWeight.bold, color: Colors.red)),
           content: Text(message),
           actions: [
             TextButton(
               onPressed: () {
                 Navigator.of(context).pop();
               },
-              child: Text('OK'),
+              child: Text('OK', style: TextStyle(color: Colors.blue)),
             ),
           ],
         );
@@ -120,15 +129,24 @@ class _DashboardPageState extends State<DashboardPage> {
   Widget build(BuildContext context) {
     final userProvider = Provider.of<UserProvider>(context);
 
+    List<dynamic> filteredLocations = _locations.where((location) {
+      if (_filter == 'Live') {
+        return location['status'] == 'live';
+      } else if (_filter == 'End') {
+        return location['status'] == 'end';
+      }
+      return true;
+    }).toList();
+
     return Scaffold(
       appBar: AppBar(
-        title: Text('Dashboard'),
+        title: Text('Location List', style: TextStyle(color: Colors.white)),
+        backgroundColor: Colors.blueAccent,
         actions: [
           IconButton(
-            icon: Icon(Icons.logout),
+            icon: Icon(Icons.logout, color: Colors.white),
             onPressed: () {
               userProvider.logout();
-              // Directly navigate to LoginPage without named routes
               Navigator.pushReplacement(
                 context,
                 MaterialPageRoute(builder: (context) => LoginPage()),
@@ -138,38 +156,93 @@ class _DashboardPageState extends State<DashboardPage> {
         ],
       ),
       body: Padding(
-        padding: const EdgeInsets.all(8.0),
+        padding: const EdgeInsets.all(16.0),
         child: Column(
           children: [
-            // Add Location Button
-            ElevatedButton(
-              onPressed: _addingLocation ? null : _addLocation,
-              child:
-                  Text(_addingLocation ? 'Adding Location...' : 'Add Location'),
+            Row(
+              mainAxisAlignment: MainAxisAlignment.spaceBetween,
+              children: [
+                Text(
+                  'Location List',
+                  style: TextStyle(fontSize: 22, fontWeight: FontWeight.bold),
+                ),
+                ElevatedButton(
+                  style: ElevatedButton.styleFrom(
+                    backgroundColor: Colors.blueAccent,
+                  ),
+                  onPressed: _addingLocation ? null : _addLocation,
+                  child: _addingLocation
+                      ? CircularProgressIndicator(color: Colors.white)
+                      : Text(
+                          'Add',
+                          style: TextStyle(color: Colors.white),
+                        ),
+                ),
+              ],
             ),
             SizedBox(height: 20),
-            // Loading indicator while fetching locations
+
+            // Filter Buttons
+            Row(
+              mainAxisAlignment: MainAxisAlignment.start,
+              children: ['All', 'Live', 'End'].map((filter) {
+                return Padding(
+                  padding: const EdgeInsets.symmetric(horizontal: 8.0),
+                  child: ElevatedButton(
+                    style: ElevatedButton.styleFrom(
+                      backgroundColor:
+                          _filter == filter ? Colors.blueAccent : Colors.grey,
+                    ),
+                    onPressed: () {
+                      setState(() {
+                        _filter = filter;
+                      });
+                    },
+                    child: Text(filter, style: TextStyle(color: Colors.white)),
+                  ),
+                );
+              }).toList(),
+            ),
+
+            SizedBox(height: 20),
+
             if (_loading)
-              CircularProgressIndicator()
+              Center(child: CircularProgressIndicator())
+            else if (filteredLocations.isEmpty)
+              Center(child: Text('No locations found.'))
             else
               Expanded(
                 child: ListView.builder(
-                  itemCount: _locations.length,
+                  itemCount: filteredLocations.length,
                   itemBuilder: (context, index) {
-                    final location = _locations[index];
-                    return ListTile(
-                      title: Text(location['name']),
-                      subtitle: Text('Status: ${location['status']}'),
-                      onTap: () {
-                        Navigator.push(
-                          context,
-                          MaterialPageRoute(
-                            builder: (context) => ShowLocationPage(
-                              locationId: location['_id'],
-                            ),
+                    final location = filteredLocations[index];
+                    return Padding(
+                      padding: const EdgeInsets.symmetric(vertical: 4.0),
+                      child: Card(
+                        elevation: 2,
+                        child: Padding(
+                          padding: const EdgeInsets.all(12.0),
+                          child: Row(
+                            mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                            children: [
+                              Text(
+                                '${index + 1}. ${location['name']}',
+                                style: TextStyle(
+                                    fontSize: 18, fontWeight: FontWeight.bold),
+                              ),
+                              Text(
+                                '${location['status']}',
+                                style: TextStyle(
+                                  fontSize: 16,
+                                  color: location['status'] == 'live'
+                                      ? Colors.green
+                                      : Colors.red,
+                                ),
+                              ),
+                            ],
                           ),
-                        );
-                      },
+                        ),
+                      ),
                     );
                   },
                 ),

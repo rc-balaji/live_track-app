@@ -33,8 +33,6 @@ class _ShowLocationPageState extends State<ShowLocationPage> {
   Future<void> _fetchLocationData() async {
     try {
       final locationData = await ApiService().fetchLocations(userId);
-      print("--------------------------");
-      print(locationData);
 
       // Search for the location by locationId
       final location = locationData.firstWhere(

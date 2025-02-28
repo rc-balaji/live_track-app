@@ -1,5 +1,5 @@
-// lib/providers/user_provider.dart
 import 'package:flutter/material.dart';
+import 'package:shared_preferences/shared_preferences.dart';
 import '../services/api_service.dart';
 
 class UserProvider with ChangeNotifier {
@@ -13,10 +13,28 @@ class UserProvider with ChangeNotifier {
   String get name => _name;
   bool get isLoading => _isLoading;
 
-  void setUser(String userId, String email, String name) {
+  UserProvider() {
+    _loadUserData(); // Load user data when the provider is initialized
+  }
+
+  void setUser(String userId, String email, String name) async {
     _userId = userId;
     _email = email;
     _name = name;
+    notifyListeners();
+
+    // Save user data to local storage
+    SharedPreferences prefs = await SharedPreferences.getInstance();
+    await prefs.setString('userId', userId);
+    await prefs.setString('email', email);
+    await prefs.setString('name', name);
+  }
+
+  Future<void> _loadUserData() async {
+    SharedPreferences prefs = await SharedPreferences.getInstance();
+    _userId = prefs.getString('userId') ?? "";
+    _email = prefs.getString('email') ?? "";
+    _name = prefs.getString('name') ?? "";
     notifyListeners();
   }
 
@@ -27,17 +45,20 @@ class UserProvider with ChangeNotifier {
     try {
       final response = await ApiService().login(email, password);
 
-      // Ensure response is not null and contains '_id'
       if (response != null && response.containsKey('_id')) {
-        _userId = response['_id']; // Access the _id directly from the response
-        _email = response['email']; // Access the email from the response
-        _name = response['username']; // Access the username from the response
+        _userId = response['_id'];
+        _email = response['email'];
+        _name = response['username'];
+
+        // Save login data
+        SharedPreferences prefs = await SharedPreferences.getInstance();
+        await prefs.setString('userId', _userId);
+        await prefs.setString('email', _email);
+        await prefs.setString('name', _name);
       } else {
-        // Handle the case when the response does not have the expected fields
         throw Exception('Invalid response structure');
       }
     } catch (e) {
-      // Handle any exceptions that may occur during the login process
       print('Error during login: $e');
     } finally {
       _isLoading = false;
@@ -45,10 +66,14 @@ class UserProvider with ChangeNotifier {
     }
   }
 
-  void logout() {
+  Future<void> logout() async {
     _userId = "";
     _email = "";
     _name = "";
     notifyListeners();
+
+    // Clear user data from local storage
+    SharedPreferences prefs = await SharedPreferences.getInstance();
+    await prefs.clear();
   }
 }
