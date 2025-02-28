@@ -218,8 +218,29 @@ class _DashboardPageState extends State<DashboardPage> {
                     final location = filteredLocations[index];
                     return Padding(
                       padding: const EdgeInsets.symmetric(vertical: 4.0),
-                      child: Card(
-                        elevation: 2,
+                      child: ElevatedButton(
+                        onPressed: () {
+                          if (location['status'] == "end") {
+                            Navigator.push(
+                              context,
+                              MaterialPageRoute(
+                                builder: (context) => ShowLocationPage(
+                                  locationId: location['_id'],
+                                ),
+                              ),
+                            );
+                          } else {
+                            Navigator.push(
+                              context,
+                              MaterialPageRoute(
+                                builder: (context) => LiveLocationPage(
+                                  locationId: location['_id'],
+                                  userId: userProvider.userId,
+                                ),
+                              ),
+                            );
+                          }
+                        },
                         child: Padding(
                           padding: const EdgeInsets.all(12.0),
                           child: Row(

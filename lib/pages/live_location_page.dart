@@ -16,94 +16,187 @@ class LiveLocationPage extends StatefulWidget {
 }
 
 class _LiveLocationPageState extends State<LiveLocationPage> {
-  bool _isTracking = false;
+  bool _isTracking = false; // Initially not tracking
+  bool _isPaused = false;
   Position? _currentPosition;
   StreamSubscription<Position>? _positionStreamSubscription;
 
   @override
   void initState() {
     super.initState();
+    // Start tracking automatically when the page loads
     _startTracking();
   }
 
   @override
   void dispose() {
-    _stopTracking(disposeCall: true);
+    _stopTracking(); // Ensure tracking is stopped when the widget is disposed
     super.dispose();
   }
 
+  // Start GPS tracking and make API call to update location
   Future<void> _startTracking() async {
     final status = await Permission.location.request();
     if (!status.isGranted) return;
 
     if (mounted) {
-      setState(() => _isTracking = true);
+      setState(() {
+        _isTracking = true;
+        _isPaused = false;
+      });
     }
 
     _positionStreamSubscription = Geolocator.getPositionStream().listen(
       (Position position) {
         if (!mounted) return;
-        setState(() => _currentPosition = position);
+        setState(() {
+          _currentPosition = position;
+        });
 
-        ApiService().updateLocation(
-          widget.locationId,
-          position.latitude,
-          position.longitude,
-          widget.userId,
-        );
+        // If not paused, send location update to the API
+        if (!_isPaused) {
+          ApiService().updateLocation(
+            widget.locationId,
+            position.latitude,
+            position.longitude,
+            widget.userId,
+          );
+        }
       },
     );
   }
 
-  Future<void> _stopTracking({bool disposeCall = false}) async {
+  // Pause tracking without making API call
+  Future<void> _pauseTracking() async {
+    if (mounted) {
+      setState(() {
+        _isPaused = true;
+      });
+    }
+  }
+
+  // Stop tracking and call API to stop tracking
+  Future<void> _stopTracking() async {
     if (_positionStreamSubscription != null) {
       await _positionStreamSubscription?.cancel();
       _positionStreamSubscription = null;
     }
 
-    if (!disposeCall && mounted) {
-      setState(() => _isTracking = false);
-    }
-
+    // Stop tracking API call
     await ApiService().stopTracking(widget.locationId);
 
-    // Prevent navigation when disposing
-    if (!disposeCall && mounted) {
-      Navigator.pushReplacement(
-        context,
-        MaterialPageRoute(builder: (context) => DashboardPage()),
-      );
+    // Check if the widget is still mounted before calling setState
+    if (mounted) {
+      setState(() {
+        _isTracking = false;
+        _isPaused = false;
+      });
     }
+
+    // Navigate to Dashboard after stopping tracking
+    Navigator.pushReplacement(
+      context,
+      MaterialPageRoute(builder: (context) => DashboardPage()),
+    );
   }
 
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      appBar: AppBar(title: Text('Live Location')),
-      body: Center(
-        child: Column(
-          mainAxisAlignment: MainAxisAlignment.center,
-          children: [
-            Text(_isTracking ? 'Tracking Active' : 'Tracking Inactive'),
-            SizedBox(height: 10),
-            if (_currentPosition != null)
-              Column(
+      appBar: AppBar(
+        title: Text('Live Location'),
+        backgroundColor: Colors.blueAccent,
+      ),
+      body: Padding(
+        padding: const EdgeInsets.symmetric(horizontal: 20.0),
+        child: Center(
+          child: Column(
+            mainAxisAlignment: MainAxisAlignment.center,
+            children: [
+              // Display tracking status
+              Text(
+                _isTracking
+                    ? _isPaused
+                        ? 'Tracking Paused'
+                        : 'Tracking Active'
+                    : 'Tracking Inactive',
+                style: TextStyle(
+                  fontSize: 24,
+                  fontWeight: FontWeight.bold,
+                  color: _isTracking
+                      ? (_isPaused ? Colors.orange : Colors.green)
+                      : Colors.red,
+                ),
+              ),
+              SizedBox(height: 20),
+              // Show latitude and longitude if available
+              if (_currentPosition != null)
+                Column(
+                  children: [
+                    Text(
+                      'Latitude: ${_currentPosition!.latitude}',
+                      style: TextStyle(fontSize: 18),
+                    ),
+                    Text(
+                      'Longitude: ${_currentPosition!.longitude}',
+                      style: TextStyle(fontSize: 18),
+                    ),
+                  ],
+                ),
+              SizedBox(height: 30),
+              // Action buttons: Start, Pause, Stop
+              Row(
+                mainAxisAlignment: MainAxisAlignment.center,
                 children: [
-                  Text('Latitude: ${_currentPosition!.latitude}'),
-                  Text('Longitude: ${_currentPosition!.longitude}'),
+                  ElevatedButton(
+                    onPressed: _isTracking && !_isPaused
+                        ? null
+                        : () => _startTracking(),
+                    child: Text('Start'),
+                    style: ElevatedButton.styleFrom(
+                      backgroundColor: Colors.green,
+                      padding:
+                          EdgeInsets.symmetric(horizontal: 30, vertical: 12),
+                      textStyle: TextStyle(fontSize: 12),
+                      shape: RoundedRectangleBorder(
+                        borderRadius: BorderRadius.circular(30),
+                      ),
+                    ),
+                  ),
+                  SizedBox(width: 20),
+                  ElevatedButton(
+                    onPressed: !_isTracking || _isPaused
+                        ? null
+                        : () => _pauseTracking(),
+                    child: Text('Pause'),
+                    style: ElevatedButton.styleFrom(
+                      backgroundColor: Colors.orange,
+                      padding:
+                          EdgeInsets.symmetric(horizontal: 30, vertical: 12),
+                      textStyle: TextStyle(fontSize: 12),
+                      shape: RoundedRectangleBorder(
+                        borderRadius: BorderRadius.circular(30),
+                      ),
+                    ),
+                  ),
+                  SizedBox(width: 20),
+                  ElevatedButton(
+                    onPressed: !_isTracking ? null : () => _stopTracking(),
+                    child: Text('Stop'),
+                    style: ElevatedButton.styleFrom(
+                      backgroundColor: Colors.red,
+                      padding:
+                          EdgeInsets.symmetric(horizontal: 30, vertical: 12),
+                      textStyle: TextStyle(fontSize: 12),
+                      shape: RoundedRectangleBorder(
+                        borderRadius: BorderRadius.circular(30),
+                      ),
+                    ),
+                  ),
                 ],
               ),
-            SizedBox(height: 20),
-            _isTracking
-                ? ElevatedButton(
-                    onPressed: () => _stopTracking(),
-                    child: Text('Stop Tracking'),
-                  )
-                : ElevatedButton(
-                    onPressed: () => _startTracking(),
-                    child: Text('Start Tracking'),
-                  ),
-          ],
+            ],
+          ),
         ),
       ),
     );
